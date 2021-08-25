@@ -21,7 +21,7 @@ public class VehicleRoutingController {
 	public RoutePlanResponse uploadFile(@RequestParam("file") MultipartFile file) {
 
 		VehicleRoutingInputData data = vehicleRoutingService.createVehicleRouteData(file);
-		RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleNumber, data.starts, data.ends);
+		RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleCount, data.starts, data.ends);
 		RoutingModel routing = new RoutingModel(manager);
 		Assignment solution = vehicleRoutingService.createRouteSolution(data, manager, routing);
 		RoutePlanResponse routePlanResponse = new RoutePlanResponse();

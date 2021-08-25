@@ -1,6 +1,12 @@
 package com.tg.routing;
 
+import java.util.List;
+
 public class Vehicle extends Location {
+
+	public String[] zones;
+
+	public String[] orderTypes;
 
 	public String firstName;
 

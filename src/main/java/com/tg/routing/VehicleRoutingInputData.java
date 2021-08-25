@@ -1,9 +1,6 @@
 package com.tg.routing;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /** VRPTW. */
 public class VehicleRoutingInputData {
@@ -18,7 +15,21 @@ public class VehicleRoutingInputData {
 
   Map<String, Vehicle> vehiclesMap = new HashMap<>();
 
-  public int vehicleNumber;
+  Set<String> allZones = new HashSet<>();
+
+  Set<String> allOrderTypes = new HashSet<>();
+
+  Map<String, long[]> orderTypePresentInOrders = new HashMap<>();
+
+  Map<String, long[]> vehiclesServingOrderType = new HashMap<>();
+
+  Map<String, long[]> zonePresentInOrders = new HashMap<>();
+
+  Map<String, long[]> vehiclesServingZone = new HashMap<>();
+
+  public int vehicleCount;
+
+  public int orderCount;
 
   public int depot;
 

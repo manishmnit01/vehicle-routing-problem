@@ -22,7 +22,7 @@ public class VehicleRouteSolver {
 		Loader.loadNativeLibraries();
 
 		final VehicleRoutingInputData data = createTestData();
-		RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleNumber, data.starts, data.ends);
+		RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleCount, data.starts, data.ends);
 
 		// Create Routing Model.
 		RoutingModel routing = new RoutingModel(manager);
@@ -54,7 +54,7 @@ public class VehicleRouteSolver {
 		timeDimension.setGlobalSpanCostCoefficient(100);
 
 		// Add time window constraints for each location except depot.
-		for (int i = data.vehicleNumber; i < data.timeWindows.length; ++i) {
+		for (int i = data.vehicleCount; i < data.timeWindows.length; ++i) {
 			long index = manager.nodeToIndex(i);
 			try {
 				timeDimension.cumulVar(index).setRange(data.timeWindows[i][0], data.timeWindows[i][1]);
@@ -63,7 +63,7 @@ public class VehicleRouteSolver {
 			}
 		}
 		// Add time window constraints for each vehicle start node.
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			long startIndex = routing.start(i);
 			long endIndex = routing.end(i);
 			try {
@@ -75,7 +75,7 @@ public class VehicleRouteSolver {
 		}
 
 		// Instantiate route start and end times to produce feasible times.
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			routing.addVariableMinimizedByFinalizer(timeDimension.cumulVar(routing.start(i)));
 			routing.addVariableMinimizedByFinalizer(timeDimension.cumulVar(routing.end(i)));
 		}
@@ -145,7 +145,7 @@ public class VehicleRouteSolver {
 
 		data.timeMatrix = computeTimeMatrix(pickupOrderList, vehicleList);
 		data.timeWindows = getTimeSlots(pickupOrderList, vehicleList);
-		data.vehicleNumber = 2;
+		data.vehicleCount = 2;
 		data.starts = new int[] {0, 1};
 		data.ends = new int[] {0, 1};
 		data.depot = 0;
@@ -233,7 +233,7 @@ public class VehicleRouteSolver {
 		RoutingDimension timeDimension = routing.getMutableDimension("Time");
 		long totalTime = 0;
 		Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			List<RouteNode> route = new ArrayList<>();
 			long index = routing.start(i);
 			IntVar startTimeVar = timeDimension.cumulVar(index);
@@ -251,7 +251,7 @@ public class VehicleRouteSolver {
 				IntVar timeVar = timeDimension.cumulVar(index);
 				int vehiclesPlusOrderIndex = manager.indexToNode(index);
 				prevLocation = currentLocation;
-				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleNumber);
+				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleCount);
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
 				double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");

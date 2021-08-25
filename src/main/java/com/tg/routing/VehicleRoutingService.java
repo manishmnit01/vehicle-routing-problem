@@ -2,6 +2,8 @@ package com.tg.routing;
 
 import com.google.ortools.constraintsolver.*;
 import com.google.protobuf.Duration;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -9,81 +11,212 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.Reader;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class VehicleRoutingService {
 
-	private static final int SERVICE_TIME = 10;
-	private static final int VEHICLE_SPEED = 20;
-	private static final int TIME_LIMIT_SECONDS = 5;
+	private static final int SERVICE_TIME = 20;
+	private static final int VEHICLE_SPEED = 40;
+	private static final int TIME_LIMIT_SECONDS = 1;
+	private static final Map<String, Integer> SERVICE_TIME_MAP;
+
+	static {
+		SERVICE_TIME_MAP = new HashMap<>();
+		SERVICE_TIME_MAP.put("1", 15);
+		SERVICE_TIME_MAP.put("2", 25);
+		SERVICE_TIME_MAP.put("3", 20);
+		SERVICE_TIME_MAP.put("4", 30);
+	}
 
 	@Autowired
 	private LgpOrderRepository lgpOrderRepository;
 
 	public VehicleRoutingInputData createVehicleRouteData(MultipartFile file) {
-
-		String line = "";
-		String splitBy = ",";
 		VehicleRoutingInputData data = new VehicleRoutingInputData();
 
 		List<PickupOrder> pickupOrderList = data.pickupOrders;
 		List<Vehicle> vehicleList = data.vehicles;
-		try
-		{
-			BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()));
-			boolean orderFlag = true;
-			while ((line = br.readLine()) != null)   //returns a Boolean value
-			{
-				String[] orders = line.split(splitBy);
-				String id = orders[0];
-				if(id.equals("END")) {
-					orderFlag = false;
-					continue;
+		boolean orderFlag = true;
+		Map<String, HashSet<Integer>> zoneToOrderSeqMap = new HashMap<>();
+		Map<String, HashSet<Integer>> zoneToVehicleSeqMap = new HashMap<>();
+
+		Map<String, HashSet<Integer>> orderTypeToOrderSeqMap = new HashMap<>();
+		Map<String, HashSet<Integer>> orderTypeToVehicleSeqMap = new HashMap<>();
+		int orderCount = 0;
+		int vehicleCount = 0;
+
+		Iterable<CSVRecord> records;
+		try {
+			Reader reader = new InputStreamReader(file.getInputStream());
+			records = CSVFormat.DEFAULT.parse(reader);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
+		for (CSVRecord record : records) {
+			String id = record.get(0);
+			if(id.equals("END")) {
+				orderFlag = false;
+				continue;
+			}
+
+			double latitute = Double.parseDouble(record.get(1));
+			double longitude = Double.parseDouble(record.get(2));
+			String[] startTimeSplit = record.get(3).split(" ");
+			int startHour = Integer.parseInt(startTimeSplit[0]);
+			int startMinute = Integer.parseInt(startTimeSplit[1]);
+			int startTimeMinutes = startHour * 60 + startMinute;
+			String[] endTimeSplit = record.get(4).split(" ");
+			int endHour = Integer.parseInt(endTimeSplit[0]);
+			int endMinute = Integer.parseInt(endTimeSplit[1]);
+			int endTimeMinutes = endHour * 60 + endMinute;
+
+			if(orderFlag) {
+				PickupOrder pickupOrder = new PickupOrder(id, latitute, longitude, startTimeMinutes, endTimeMinutes);
+				String zone = record.get(5);
+				pickupOrder.zone = zone;
+				String orderType = record.get(6);
+				pickupOrder.orderType = orderType;
+				pickupOrder.prevStatus = Integer.parseInt(record.get(7));
+				pickupOrderList.add(pickupOrder);
+
+				HashSet<Integer> orderSeqSetForZone = zoneToOrderSeqMap.get(zone);
+				if (orderSeqSetForZone == null) {
+					orderSeqSetForZone = new HashSet<>();
+					zoneToOrderSeqMap.put(zone, orderSeqSetForZone);
+				}
+				orderSeqSetForZone.add(orderCount);
+
+				HashSet<Integer> orderSeqSetForType = orderTypeToOrderSeqMap.get(orderType);
+				if (orderSeqSetForType == null) {
+					orderSeqSetForType = new HashSet<>();
+					orderTypeToOrderSeqMap.put(orderType, orderSeqSetForType);
+				}
+				orderSeqSetForType.add(orderCount);
+				orderCount++;
+			}
+			else {
+				Vehicle vehicle = new Vehicle(id, latitute, longitude, startTimeMinutes, endTimeMinutes);
+				String[] zones = record.get(5).split("#");
+				vehicle.zones = zones;
+				String[] orderTypes = record.get(6).split("#");
+				vehicle.orderTypes = orderTypes;
+				vehicle.firstName = record.get(8);
+				vehicle.lastName = record.get(9);
+				vehicle.mobileNumber = record.get(10);
+				vehicleList.add(vehicle);
+				data.vehiclesMap.put(id, vehicle);
+
+				for (String zone : zones) {
+					HashSet<Integer> vehicleSeqSetForZone = zoneToVehicleSeqMap.get(zone);
+					if (vehicleSeqSetForZone == null) {
+						vehicleSeqSetForZone = new HashSet<>();
+						zoneToVehicleSeqMap.put(zone, vehicleSeqSetForZone);
+					}
+					vehicleSeqSetForZone.add(vehicleCount);
 				}
 
-				double latitute = Double.parseDouble(orders[1]);
-				double longitude = Double.parseDouble(orders[2]);
-				String[] startTimeSplit = orders[3].split(" ");
-				int startHour = Integer.parseInt(startTimeSplit[0]);
-				int startMinute = Integer.parseInt(startTimeSplit[1]);
-				int startTimeMinutes = startHour * 60 + startMinute;
-				String[] endTimeSplit = orders[4].split(" ");
-				int endHour = Integer.parseInt(endTimeSplit[0]);
-				int endMinute = Integer.parseInt(endTimeSplit[1]);
-				int endTimeMinutes = endHour * 60 + endMinute;
-
-				if(orderFlag) {
-					pickupOrderList.add(new PickupOrder(id, latitute, longitude, startTimeMinutes, endTimeMinutes));
+				for (String orderType : orderTypes) {
+					HashSet<Integer> vehicleSeqSetForType = orderTypeToVehicleSeqMap.get(orderType);
+					if (vehicleSeqSetForType == null) {
+						vehicleSeqSetForType = new HashSet<>();
+						orderTypeToVehicleSeqMap.put(orderType, vehicleSeqSetForType);
+					}
+					vehicleSeqSetForType.add(vehicleCount);
 				}
-				else {
-					Vehicle vehicle = new Vehicle(id, latitute, longitude, startTimeMinutes, endTimeMinutes);
-					vehicle.firstName = orders[5];
-					vehicle.lastName = orders[6];
-					vehicle.mobileNumber = orders[7];
-					vehicleList.add(vehicle);
-					data.vehiclesMap.put(id, vehicle);
+				vehicleCount++;
+			}
+		}
+
+		data.allZones.addAll(zoneToVehicleSeqMap.keySet());
+		data.allZones.addAll(zoneToOrderSeqMap.keySet());
+
+		data.allOrderTypes.addAll(orderTypeToVehicleSeqMap.keySet());
+		data.allOrderTypes.addAll(orderTypeToOrderSeqMap.keySet());
+
+		for (String orderType : data.allOrderTypes) {
+			long[] orderSeqArrayForOrderType = new long[orderCount + vehicleCount];
+			data.orderTypePresentInOrders.put(orderType, orderSeqArrayForOrderType);
+			Set<Integer> ordersForOrderType = orderTypeToOrderSeqMap.get(orderType);
+			if(ordersForOrderType == null) {
+				ordersForOrderType = new HashSet<>();
+			}
+
+			for (int i=0; i < vehicleCount; i++) {
+				orderSeqArrayForOrderType[i] = 0;
+			}
+
+			for (int i=0; i < orderCount; i++) {
+				if (ordersForOrderType.contains(i)) {
+					orderSeqArrayForOrderType[i + vehicleCount] = 1;
+				} else {
+					orderSeqArrayForOrderType[i + vehicleCount] = 0;
+				}
+			}
+
+			long[] vehicleSeqArrayForOrderType = new long[vehicleCount];
+			data.vehiclesServingOrderType.put(orderType, vehicleSeqArrayForOrderType);
+			Set<Integer> vehiclesForOrderType = orderTypeToVehicleSeqMap.get(orderType);
+			if(vehiclesForOrderType == null) {
+				vehiclesForOrderType = new HashSet<>();
+			}
+			for (int i=0; i < vehicleCount; i++) {
+				if (vehiclesForOrderType.contains(i)) {
+					vehicleSeqArrayForOrderType[i] = 100;
+				} else {
+					vehicleSeqArrayForOrderType[i] = 0;
 				}
 			}
 		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
+
+		for (String zone : data.allZones) {
+			long[] orderSeqArrayForZone = new long[orderCount + vehicleCount];
+			data.zonePresentInOrders.put(zone, orderSeqArrayForZone);
+			Set<Integer> ordersForZone = zoneToOrderSeqMap.get(zone);
+			if(ordersForZone == null) {
+				ordersForZone = new HashSet<>();
+			}
+
+			for (int i=0; i < vehicleCount; i++) {
+				orderSeqArrayForZone[i] = 0;
+			}
+
+			for (int i=0; i < orderCount; i++) {
+				if (ordersForZone.contains(i)) {
+					orderSeqArrayForZone[i + vehicleCount] = 1;
+				} else {
+					orderSeqArrayForZone[i + vehicleCount] = 0;
+				}
+			}
+
+			long[] vehicleSeqArrayForZone = new long[vehicleCount];
+			data.vehiclesServingZone.put(zone, vehicleSeqArrayForZone);
+			Set<Integer> vehiclesForZone = zoneToVehicleSeqMap.get(zone);
+			if(vehiclesForZone == null) {
+				vehiclesForZone = new HashSet<>();
+			}
+			for (int i=0; i < vehicleCount; i++) {
+				if (vehiclesForZone.contains(i)) {
+					vehicleSeqArrayForZone[i] = 100;
+				} else {
+					vehicleSeqArrayForZone[i] = 0;
+				}
+			}
 		}
 
 		data.timeMatrix = computeTimeMatrix(pickupOrderList, vehicleList);
 		data.timeWindows = getTimeSlots(pickupOrderList, vehicleList);
-		data.vehicleNumber = vehicleList.size();
-		data.starts = new int[data.vehicleNumber];
-		for (int i=0; i< data.vehicleNumber; i++) {
+		data.vehicleCount = vehicleList.size();
+		data.orderCount = pickupOrderList.size();
+		data.starts = new int[data.vehicleCount];
+		for (int i = 0; i< data.vehicleCount; i++) {
 			data.starts[i] = i;
 		}
-		data.ends = new int[data.vehicleNumber];
-		for (int i=0; i< data.vehicleNumber; i++) {
+		data.ends = new int[data.vehicleCount];
+		for (int i = 0; i< data.vehicleCount; i++) {
 			data.ends[i] = i;
 		}
 		data.depot = 0;
@@ -101,7 +234,14 @@ public class VehicleRoutingService {
 						return 0;
 					}
 					else {
-						return data.timeMatrix[fromNode][toNode] + SERVICE_TIME;
+						int serviceTime = 0;
+						if(fromNode >= data.vehicleCount) {
+							int orderIndex = fromNode - data.vehicleCount;
+							PickupOrder pickupOrder = data.pickupOrders.get(orderIndex);
+							Integer serviceTimeForOrder = SERVICE_TIME_MAP.get(pickupOrder.orderType);
+							serviceTime = serviceTimeForOrder != null ? serviceTimeForOrder : SERVICE_TIME;
+						}
+						return data.timeMatrix[fromNode][toNode] + serviceTime;
 					}
 				});
 
@@ -117,8 +257,32 @@ public class VehicleRoutingService {
 		RoutingDimension timeDimension = routing.getMutableDimension("Time");
 		timeDimension.setGlobalSpanCostCoefficient(100);
 
+		// Put restrictions for order type
+		for (String orderType : data.allOrderTypes) {
+			int orderTypeCallbackIndex = routing.registerUnaryTransitCallback((long fromIndex) -> {
+				int fromNode = manager.indexToNode(fromIndex);
+				return data.orderTypePresentInOrders.get(orderType)[fromNode];
+			});
+			routing.addDimensionWithVehicleCapacity(orderTypeCallbackIndex, 0, // null capacity slack
+					data.vehiclesServingOrderType.get(orderType), // vehicle maximum capacities
+					true, // start cumul to zero
+					orderType);
+		}
+
+		// Put restrictions for zone
+		for (String zone : data.allZones) {
+			int zoneCallbackIndex = routing.registerUnaryTransitCallback((long fromIndex) -> {
+				int fromNode = manager.indexToNode(fromIndex);
+				return data.zonePresentInOrders.get(zone)[fromNode];
+			});
+			routing.addDimensionWithVehicleCapacity(zoneCallbackIndex, 0, // null capacity slack
+					data.vehiclesServingZone.get(zone), // vehicle maximum capacities
+					true, // start cumul to zero
+					zone);
+		}
+
 		// Add time window constraints for each location except depot.
-		for (int i = data.vehicleNumber; i < data.timeWindows.length; ++i) {
+		for (int i = data.vehicleCount; i < data.timeWindows.length; ++i) {
 			long index = manager.nodeToIndex(i);
 			try {
 				timeDimension.cumulVar(index).setRange(data.timeWindows[i][0], data.timeWindows[i][1]);
@@ -127,7 +291,7 @@ public class VehicleRoutingService {
 			}
 		}
 		// Add time window constraints for each vehicle start node.
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			long startIndex = routing.start(i);
 			long endIndex = routing.end(i);
 			try {
@@ -139,14 +303,21 @@ public class VehicleRoutingService {
 		}
 
 		// Instantiate route start and end times to produce feasible times.
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			routing.addVariableMinimizedByFinalizer(timeDimension.cumulVar(routing.start(i)));
 			routing.addVariableMinimizedByFinalizer(timeDimension.cumulVar(routing.end(i)));
 		}
 
-		//Allow to drop nodes.
-		long penalty = Integer.MAX_VALUE;
-		for (int i = 1; i < data.timeMatrix.length; ++i) {
+		//Allow to drop nodes. Higher penalty on dropping the already confirmed orders.
+		for (int i = data.vehicleCount; i < data.timeMatrix.length; ++i) {
+			PickupOrder pickupOrder = data.pickupOrders.get( i - data.vehicleCount);
+			long penalty;
+			if (pickupOrder.prevStatus == 4) {
+				penalty = Integer.MAX_VALUE;
+			}
+			else {
+				penalty = Integer.MAX_VALUE / 2;
+			}
 			routing.addDisjunction(new long[] {manager.nodeToIndex(i)}, penalty);
 		}
 
@@ -173,7 +344,7 @@ public class VehicleRoutingService {
 		RoutingDimension timeDimension = routing.getMutableDimension("Time");
 		long totalTime = 0;
 		Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
-		for (int i = 0; i < data.vehicleNumber; ++i) {
+		for (int i = 0; i < data.vehicleCount; ++i) {
 			List<RouteNode> route = new ArrayList<>();
 			long index = routing.start(i);
 			IntVar startTimeVar = timeDimension.cumulVar(index);
@@ -191,7 +362,7 @@ public class VehicleRoutingService {
 				IntVar timeVar = timeDimension.cumulVar(index);
 				int vehiclesPlusOrderIndex = manager.indexToNode(index);
 				prevLocation = currentLocation;
-				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleNumber);
+				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleCount);
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
 				double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
