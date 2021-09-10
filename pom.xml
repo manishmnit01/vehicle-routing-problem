@@ -13,7 +13,7 @@
 </parent>
 <groupId>com.google.ortools</groupId>
 <artifactId>vehicle-routing-problem</artifactId>
-<version>0.0.1</version>
+<version>0.0.2</version>
 <packaging>jar</packaging>
 
 <name>${project.groupId}:${project.artifactId}</name>
@@ -100,11 +100,6 @@
   <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-data-mongodb</artifactId>
-  </dependency>
-  <dependency>
-    <groupId>org.apache.commons</groupId>
-    <artifactId>commons-csv</artifactId>
-    <version>1.9.0</version>
   </dependency>
 </dependencies>
 

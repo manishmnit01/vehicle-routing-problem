@@ -14,16 +14,17 @@ public class RouteNode {
 
 	public double longitude;
 
-	public double distance;
+	public int distanceFromPrevNode;
 
-	public RouteNode(int sequence, String orderId, long reachTime, long leaveTime, double latitude, double longitude, double distance) {
+	public int distanceSoFar;
+
+	public RouteNode(int sequence, String orderId, long reachTime, long leaveTime, double latitude, double longitude) {
 		this.sequence = sequence;
 		this.orderId = orderId;
 		this.reachTime = reachTime;
 		this.leaveTime = leaveTime;
 		this.latitude = latitude;
 		this.longitude = longitude;
-		this.distance = distance;
 	}
 
 	@Override
@@ -34,7 +35,7 @@ public class RouteNode {
 		long leaveMinutes = leaveTime % 60;
 		return "RouteNode{" +
 				"orderId=" + orderId +
-				" distance=" + distance +
+				" distance=" + distanceFromPrevNode +
 				" reachTIme=" + reachHours + ":" + reachMinutes +
 				" leaveTIme=" + leaveHours + ":" + leaveMinutes +
 				'}';

@@ -2,8 +2,6 @@ package com.tg.routing;
 
 import com.google.ortools.constraintsolver.*;
 import com.google.protobuf.Duration;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,8 +17,11 @@ import java.util.stream.Collectors;
 public class VehicleRoutingService {
 
 	private static final int SERVICE_TIME = 20;
-	private static final int VEHICLE_SPEED = 40;
-	private static final int TIME_LIMIT_SECONDS = 1;
+	private static final int VEHICLE_SPEED = 20;
+	private static final int TIME_LIMIT_SECONDS = 120;
+	private static final int BUFFER_MINUTES = 10;
+	private static final String TIME_DIMENSION = "Time";
+	private static final String DISTANCE_DIMENSION = "Distance";
 	private static final Map<String, Integer> SERVICE_TIME_MAP;
 
 	static {
@@ -34,7 +35,7 @@ public class VehicleRoutingService {
 	@Autowired
 	private LgpOrderRepository lgpOrderRepository;
 
-	public VehicleRoutingInputData createVehicleRouteData(MultipartFile file) {
+	public VehicleRoutingInputData createVehicleRouteData(MultipartFile file) throws IOException {
 		VehicleRoutingInputData data = new VehicleRoutingInputData();
 
 		List<PickupOrder> pickupOrderList = data.pickupOrders;
@@ -48,39 +49,35 @@ public class VehicleRoutingService {
 		int orderCount = 0;
 		int vehicleCount = 0;
 
-		Iterable<CSVRecord> records;
-		try {
-			Reader reader = new InputStreamReader(file.getInputStream());
-			records = CSVFormat.DEFAULT.parse(reader);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-		for (CSVRecord record : records) {
-			String id = record.get(0);
+		BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()));
+		String line;
+		while ((line = br.readLine()) != null && !line.isEmpty())   //returns a Boolean value
+		{
+			String[] orders = line.split(",");
+			String id = orders[0];
 			if(id.equals("END")) {
 				orderFlag = false;
 				continue;
 			}
 
-			double latitute = Double.parseDouble(record.get(1));
-			double longitude = Double.parseDouble(record.get(2));
-			String[] startTimeSplit = record.get(3).split(" ");
+			double latitute = Double.parseDouble(orders[1]);
+			double longitude = Double.parseDouble(orders[2]);
+			String[] startTimeSplit = orders[3].split(" ");
 			int startHour = Integer.parseInt(startTimeSplit[0]);
 			int startMinute = Integer.parseInt(startTimeSplit[1]);
 			int startTimeMinutes = startHour * 60 + startMinute;
-			String[] endTimeSplit = record.get(4).split(" ");
+			String[] endTimeSplit = orders[4].split(" ");
 			int endHour = Integer.parseInt(endTimeSplit[0]);
 			int endMinute = Integer.parseInt(endTimeSplit[1]);
 			int endTimeMinutes = endHour * 60 + endMinute;
 
 			if(orderFlag) {
 				PickupOrder pickupOrder = new PickupOrder(id, latitute, longitude, startTimeMinutes, endTimeMinutes);
-				String zone = record.get(5);
+				String zone = orders[5];
 				pickupOrder.zone = zone;
-				String orderType = record.get(6);
+				String orderType = orders[6];
 				pickupOrder.orderType = orderType;
-				pickupOrder.prevStatus = Integer.parseInt(record.get(7));
+				pickupOrder.prevStatus = Integer.parseInt(orders[7]);
 				pickupOrderList.add(pickupOrder);
 
 				HashSet<Integer> orderSeqSetForZone = zoneToOrderSeqMap.get(zone);
@@ -100,13 +97,13 @@ public class VehicleRoutingService {
 			}
 			else {
 				Vehicle vehicle = new Vehicle(id, latitute, longitude, startTimeMinutes, endTimeMinutes);
-				String[] zones = record.get(5).split("#");
+				String[] zones = orders[5].split("#");
 				vehicle.zones = zones;
-				String[] orderTypes = record.get(6).split("#");
+				String[] orderTypes = orders[6].split("#");
 				vehicle.orderTypes = orderTypes;
-				vehicle.firstName = record.get(8);
-				vehicle.lastName = record.get(9);
-				vehicle.mobileNumber = record.get(10);
+				vehicle.firstName = orders[8];
+				vehicle.lastName = orders[9];
+				vehicle.mobileNumber = orders[10];
 				vehicleList.add(vehicle);
 				data.vehiclesMap.put(id, vehicle);
 
@@ -130,6 +127,7 @@ public class VehicleRoutingService {
 				vehicleCount++;
 			}
 		}
+		br.close();
 
 		data.allZones.addAll(zoneToVehicleSeqMap.keySet());
 		data.allZones.addAll(zoneToOrderSeqMap.keySet());
@@ -208,6 +206,7 @@ public class VehicleRoutingService {
 		}
 
 		data.timeMatrix = computeTimeMatrix(pickupOrderList, vehicleList);
+		data.distanceMatrix = computeDistanceMatrix(pickupOrderList, vehicleList);
 		data.timeWindows = getTimeSlots(pickupOrderList, vehicleList);
 		data.vehicleCount = vehicleList.size();
 		data.orderCount = pickupOrderList.size();
@@ -245,17 +244,42 @@ public class VehicleRoutingService {
 					}
 				});
 
-		// Define cost of each arc.
-		routing.setArcCostEvaluatorOfAllVehicles(transitCallbackIndex);
-
 		// Add Time constraint.
 		routing.addDimension(transitCallbackIndex, // transit callback
 				12 * 60, // Maximum waiting time one vehicle can wait from one order to next
 				24 * 60, // Time before this vehicle has to reach the end depot.
 				false, // start cumul to zero
-				"Time");
-		RoutingDimension timeDimension = routing.getMutableDimension("Time");
-		timeDimension.setGlobalSpanCostCoefficient(100);
+				TIME_DIMENSION);
+		RoutingDimension timeDimension = routing.getMutableDimension(TIME_DIMENSION);
+
+		int distanceCallbackIndex =
+				routing.registerTransitCallback((long fromIndex, long toIndex) -> {
+					// Convert from routing variable Index to user NodeIndex.
+					int fromNode = manager.indexToNode(fromIndex);
+					int toNode = manager.indexToNode(toIndex);
+					if(fromNode == toNode) {
+						return 0;
+					}
+					else {
+						return data.distanceMatrix[fromNode][toNode];
+					}
+				});
+		// Define cost of each arc.
+		routing.setArcCostEvaluatorOfAllVehicles(distanceCallbackIndex);
+		routing.addDimension(distanceCallbackIndex, // transit callback
+				0,
+				3000, // Maximum distance by vehicle
+				true, // start cumul to zero
+				DISTANCE_DIMENSION);
+		RoutingDimension distanceDimension = routing.getMutableDimension(DISTANCE_DIMENSION);
+		distanceDimension.setGlobalSpanCostCoefficient(1000);
+
+		// Add condition for minimum distance travelled by each vehicle.
+		/*for (int i = 0; i < data.vehicleCount; ++i) {
+			long endIndex = routing.end(i);
+			distanceDimension.setCumulVarSoftLowerBound(endIndex, 5, 100000);
+			//distanceDimension.cumulVar(endIndex).removeInterval(0, 5);
+		}*/
 
 		// Put restrictions for order type
 		for (String orderType : data.allOrderTypes) {
@@ -297,6 +321,8 @@ public class VehicleRoutingService {
 			try {
 				timeDimension.cumulVar(startIndex).setRange(data.timeWindows[i][0], data.timeWindows[i][1]);
 				timeDimension.cumulVar(endIndex).setRange(data.vehicles.get(i).startTimeMinutes, data.vehicles.get(i).endTimeMinutes);
+				timeDimension.setCumulVarSoftLowerBound(endIndex, 660, 1000);
+				//timeDimension.cumulVar(endIndex).removeInterval(0, 120);
 			} catch (Exception e) {
 				System.out.println("Time window for depot is not smallest");
 			}
@@ -341,7 +367,8 @@ public class VehicleRoutingService {
 		}
 
 		// Inspect solution.
-		RoutingDimension timeDimension = routing.getMutableDimension("Time");
+		RoutingDimension timeDimension = routing.getMutableDimension(TIME_DIMENSION);
+		RoutingDimension distanceDimension = routing.getMutableDimension(DISTANCE_DIMENSION);
 		long totalTime = 0;
 		Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
 		for (int i = 0; i < data.vehicleCount; ++i) {
@@ -352,7 +379,9 @@ public class VehicleRoutingService {
 			if(startPointIndex != i) {
 				throw new RuntimeException("start pickup index must be same as vehicle index");
 			}
-			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude, -1);
+			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			startRouteNode.distanceFromPrevNode = -1;
+			startRouteNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
 			route.add(startRouteNode);
 			index = solution.value(routing.nextVar(index));
 			Location prevLocation = null;
@@ -365,8 +394,10 @@ public class VehicleRoutingService {
 				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleCount);
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
-				double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
-				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude, distanceFromPrevLocation);
+				int distanceFromPrevLocation = (int) distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
+				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
+				routeNode.distanceFromPrevNode = distanceFromPrevLocation;
+				routeNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
 				route.add(routeNode);
 				index = solution.value(routing.nextVar(index));
 			}
@@ -375,7 +406,13 @@ public class VehicleRoutingService {
 			if(endPointIndex != i) {
 				throw new RuntimeException("end pickup index must be same as vehicle index");
 			}
-			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude, -1);
+			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(endTimeVar), solution.max(endTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			int distance = 0;
+			if(prevLocation != null) {
+				distance = (int) distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
+			}
+			endRouteNode.distanceFromPrevNode = distance;
+			endRouteNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
 			route.add(endRouteNode);
 
 			totalTime += solution.min(endTimeVar);
@@ -392,8 +429,8 @@ public class VehicleRoutingService {
 			// Remove first and last nodes because that is vehicle place
 			routeNodes.remove(routeNodes.size()-1);
 			routeNodes.remove(0);
-			List<String> orderIds = routeNodes.stream().map(order -> order.orderId).collect(Collectors.toList());
-			lgpOrderRepository.updateOrderStatusSuccess(orderIds, assignedVehicle);
+			//List<String> orderIds = routeNodes.stream().map(order -> order.orderId).collect(Collectors.toList());
+			lgpOrderRepository.updateOrderStatusSuccess(routeNodes, assignedVehicle);
 		}
 
 		List<String> droppedOrderIds = droppedOrders.stream().map(order -> order.id).collect(Collectors.toList());
@@ -413,15 +450,38 @@ public class VehicleRoutingService {
 			for (int toNode = 0; toNode < totalSize; ++toNode) {
 				Location point1 = vehicleAndOrdersList.get(fromNode);
 				Location point2 = vehicleAndOrdersList.get(toNode);
-				double distanceInKm = distance(point1.latitude, point1.longitude, point1.latitude, point2.longitude, "K");
-				long approaxDistance = Math.round(distanceInKm);
-				long approaximateTimeInMinutes = approaxDistance * 60 / VEHICLE_SPEED;
+				long distanceInKm = distance(point1.latitude, point1.longitude, point2.latitude, point2.longitude, "K");
+				//long approaxDistance = (long) Math.ceil(distanceInKm);
+				long approaximateTimeInMinutes = distanceInKm * 60 / VEHICLE_SPEED;
 				timeMatrix[fromNode][toNode] = approaximateTimeInMinutes;
 			}
 		}
 
 		//printMatrix(timeMatrix);
 		return timeMatrix;
+	}
+
+	private static long[][] computeDistanceMatrix(List<PickupOrder> pickupOrderList, List<Vehicle> vehicleList) {
+		int orderSize = pickupOrderList.size();
+		int vehicleSize = vehicleList.size();
+		int totalSize = orderSize+vehicleSize;
+		List<Location> vehicleAndOrdersList = new ArrayList<>();
+		vehicleAndOrdersList.addAll(vehicleList);
+		vehicleAndOrdersList.addAll(pickupOrderList);
+		long[][] distanceMatrix = new long[totalSize][totalSize];
+
+		for (int fromNode = 0; fromNode < totalSize; ++fromNode) {
+			for (int toNode = 0; toNode < totalSize; ++toNode) {
+				Location point1 = vehicleAndOrdersList.get(fromNode);
+				Location point2 = vehicleAndOrdersList.get(toNode);
+				double distanceInKm = distance(point1.latitude, point1.longitude, point2.latitude, point2.longitude, "K");
+				long approaxDistance = Math.round(distanceInKm);
+				distanceMatrix[fromNode][toNode] = approaxDistance;
+			}
+		}
+
+		//printMatrix(distanceMatrix);
+		return distanceMatrix;
 	}
 
 	private static long[][] getTimeSlots(List<PickupOrder> pickupOrderList, List<Vehicle> vehicleList) {
@@ -435,8 +495,8 @@ public class VehicleRoutingService {
 			timeSlots[i][1] = vehicleList.get(i).startTimeMinutes;
 		}
 		for (int i = 0; i < orderSize; ++i) {
-			timeSlots[i + vehicleSize][0] = pickupOrderList.get(i).startTimeMinutes;
-			timeSlots[i + vehicleSize][1] = pickupOrderList.get(i).endTimeMinutes;
+			timeSlots[i + vehicleSize][0] = pickupOrderList.get(i).startTimeMinutes - BUFFER_MINUTES;
+			timeSlots[i + vehicleSize][1] = pickupOrderList.get(i).endTimeMinutes + BUFFER_MINUTES;
 		}
 		//printMatrix(timeSlots);
 		return timeSlots;
@@ -451,7 +511,7 @@ public class VehicleRoutingService {
 		}
 	}
 
-	private static double distance(double lat1, double lon1, double lat2, double lon2, String unit) {
+	private static long distance(double lat1, double lon1, double lat2, double lon2, String unit) {
 		if ((lat1 == lat2) && (lon1 == lon2)) {
 			return 0;
 		}
@@ -466,7 +526,8 @@ public class VehicleRoutingService {
 			} else if (unit.equals("N")) {
 				dist = dist * 0.8684;
 			}
-			return (dist);
+			long distance = (long) Math.ceil(dist);
+			return distance;
 		}
 	}
 }

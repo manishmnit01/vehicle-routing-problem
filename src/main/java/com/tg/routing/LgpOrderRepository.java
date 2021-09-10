@@ -16,11 +16,10 @@ public class LgpOrderRepository {
 	@Autowired
 	private MongoTemplate mongoTemplate;
 
-	public void updateOrderStatusSuccess(List<String> orderIds, Vehicle vehicle) {
-
+	public void updateOrderStatusSuccess(List<RouteNode> routeNodes, Vehicle vehicle) {
 		int pickupSeq = 10;
-		for (String orderId : orderIds) {
-			Criteria criteria = Criteria.where("orderId").is(orderId);
+		for (RouteNode routeNode : routeNodes) {
+			Criteria criteria = Criteria.where("orderId").is(routeNode.orderId);
 			Query query = new Query(criteria);
 			Update update = new Update();
 			update.set("orderStatus", 4);
@@ -29,13 +28,14 @@ public class LgpOrderRepository {
 			update.set("lastName", vehicle.lastName);
 			update.set("mobileNumber", vehicle.mobileNumber);
 			update.set("pickupSeq", pickupSeq);
+			update.set("distanceFromPrevNode", routeNode.distanceFromPrevNode);
+			update.set("distanceSoFar", routeNode.distanceSoFar);
 			mongoTemplate.findAndModify(query, update, Map.class,"LgpOrder");
 			pickupSeq = pickupSeq + 10;
 		}
 	}
 
 	public void updateOrderStatusFailure(List<String> orderIds) {
-
 		Criteria criteria = Criteria.where("orderId").in(orderIds);
 		Query query = new Query(criteria);
 		Update update = new Update();

@@ -7,6 +7,8 @@ public class VehicleRoutingInputData {
 
   public long[][] timeMatrix;
 
+  public long[][] distanceMatrix;
+
   public long[][] timeWindows;
 
   List<PickupOrder> pickupOrders = new ArrayList<>();

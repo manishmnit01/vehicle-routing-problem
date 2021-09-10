@@ -17,17 +17,18 @@ public class VehicleRoutingController {
 	@Autowired
 	private VehicleRoutingService vehicleRoutingService;
 
-	@RequestMapping(value = "/upload", method = RequestMethod.POST)
-	public RoutePlanResponse uploadFile(@RequestParam("file") MultipartFile file) {
+	@Autowired
+	private OrderAssignmentService orderAssignmentService;
 
-		VehicleRoutingInputData data = vehicleRoutingService.createVehicleRouteData(file);
-		RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleCount, data.starts, data.ends);
-		RoutingModel routing = new RoutingModel(manager);
-		Assignment solution = vehicleRoutingService.createRouteSolution(data, manager, routing);
-		RoutePlanResponse routePlanResponse = new RoutePlanResponse();
-		routePlanResponse.allVehiclesRoute = vehicleRoutingService.getVehiclesRoutes(data, routing, manager, solution);
-		routePlanResponse.droppedOrders = data.pickupOrders.stream().filter(order -> order.status == PickupOrderStatus.PENDING).collect(Collectors.toList());
-		vehicleRoutingService.updateOrdersStatusInDB(routePlanResponse.allVehiclesRoute, routePlanResponse.droppedOrders, data.vehiclesMap);
-		return routePlanResponse;
+	@RequestMapping(value = "/upload", method = RequestMethod.POST)
+	public OrderAssignmentResponse uploadFile(@RequestParam("file") MultipartFile file) throws Exception {
+
+		VehicleRoutingInputData vehicleRoutingInputData = vehicleRoutingService.createVehicleRouteData(file);
+		String assignmentId = orderAssignmentService.createOrderAssignment(vehicleRoutingInputData.pickupOrders.size());
+		OrderAssignmentResponse orderAssignmentResponse = new OrderAssignmentResponse();
+		orderAssignmentResponse.assignmentId = assignmentId;
+
+		orderAssignmentService.startAssignment(vehicleRoutingInputData, assignmentId);
+		return orderAssignmentResponse;
 	}
 }

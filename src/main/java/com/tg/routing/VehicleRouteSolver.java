@@ -241,7 +241,7 @@ public class VehicleRouteSolver {
 			if(startPointIndex != i) {
 				throw new RuntimeException("start pickup index must be same as vehicle index");
 			}
-			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude, -1);
+			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
 			route.add(startRouteNode);
 			index = solution.value(routing.nextVar(index));
 			Location prevLocation = null;
@@ -254,8 +254,8 @@ public class VehicleRouteSolver {
 				currentLocation = data.pickupOrders.get(vehiclesPlusOrderIndex - data.vehicleCount);
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
-				double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
-				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude, distanceFromPrevLocation);
+				//double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
+				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
 				route.add(routeNode);
 				index = solution.value(routing.nextVar(index));
 			}
@@ -264,7 +264,7 @@ public class VehicleRouteSolver {
 			if(endPointIndex != i) {
 				throw new RuntimeException("end pickup index must be same as vehicle index");
 			}
-			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude, -1);
+			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
 			route.add(endRouteNode);
 
 			totalTime += solution.min(endTimeVar);
