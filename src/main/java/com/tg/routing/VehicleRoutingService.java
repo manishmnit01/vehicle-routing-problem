@@ -18,8 +18,10 @@ public class VehicleRoutingService {
 
 	private static final int SERVICE_TIME = 20;
 	private static final int VEHICLE_SPEED = 20;
-	private static final int TIME_LIMIT_SECONDS = 120;
-	private static final int BUFFER_MINUTES = 10;
+	private static final int TIME_LIMIT_SECONDS = 60;
+	private static final int BUFFER_MINUTES = 0;
+	private static final int MAX_WAIT_TIME = 12*60;
+	private static final int MAX_ONDUTY_TIME = 24*60;
 	private static final String TIME_DIMENSION = "Time";
 	private static final String DISTANCE_DIMENSION = "Distance";
 	private static final Map<String, Integer> SERVICE_TIME_MAP;
@@ -233,21 +235,14 @@ public class VehicleRoutingService {
 						return 0;
 					}
 					else {
-						int serviceTime = 0;
-						if(fromNode >= data.vehicleCount) {
-							int orderIndex = fromNode - data.vehicleCount;
-							PickupOrder pickupOrder = data.pickupOrders.get(orderIndex);
-							Integer serviceTimeForOrder = SERVICE_TIME_MAP.get(pickupOrder.orderType);
-							serviceTime = serviceTimeForOrder != null ? serviceTimeForOrder : SERVICE_TIME;
-						}
-						return data.timeMatrix[fromNode][toNode] + serviceTime;
+						return data.timeMatrix[fromNode][toNode];
 					}
 				});
 
 		// Add Time constraint.
 		routing.addDimension(transitCallbackIndex, // transit callback
-				12 * 60, // Maximum waiting time one vehicle can wait from one order to next
-				24 * 60, // Time before this vehicle has to reach the end depot.
+				MAX_WAIT_TIME, // Maximum waiting time one vehicle can wait from one order to next
+				MAX_ONDUTY_TIME, // Time before this vehicle has to reach the end depot.
 				false, // start cumul to zero
 				TIME_DIMENSION);
 		RoutingDimension timeDimension = routing.getMutableDimension(TIME_DIMENSION);
@@ -310,6 +305,10 @@ public class VehicleRoutingService {
 			long index = manager.nodeToIndex(i);
 			try {
 				timeDimension.cumulVar(index).setRange(data.timeWindows[i][0], data.timeWindows[i][1]);
+				PickupOrder pickupOrder = data.pickupOrders.get(i);
+				Integer serviceTimeForOrder = SERVICE_TIME_MAP.get(pickupOrder.orderType);
+				int serviceTime = serviceTimeForOrder != null ? serviceTimeForOrder : SERVICE_TIME;
+				timeDimension.slackVar(index).setRange(serviceTime, MAX_WAIT_TIME);
 			} catch (Exception e) {
 				System.out.println("Time window for order "+ i + " is not correct so dropping the order.");
 			}
