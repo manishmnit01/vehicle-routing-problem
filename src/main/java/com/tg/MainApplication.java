@@ -1,5 +1,6 @@
-package com.tg.routing;
+package com.tg;
 
+import com.tg.routing.NativeUtils;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;

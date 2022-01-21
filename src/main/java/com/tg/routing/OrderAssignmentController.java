@@ -7,7 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 @CrossOrigin
 @RestController
 @RequestMapping("/api/v1/vrp")
-public class VehicleRoutingController {
+public class OrderAssignmentController {
 
 	@Autowired
 	private VehicleRoutingSolver vehicleRoutingSolver;

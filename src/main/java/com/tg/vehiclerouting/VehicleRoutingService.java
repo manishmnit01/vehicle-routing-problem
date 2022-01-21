@@ -15,10 +15,11 @@ public class VehicleRoutingService {
 
 	private static final int SERVICE_TIME = 20;
 	private static final int VEHICLE_SPEED = 20;
-	private static final int TIME_LIMIT_SECONDS = 15;
+	private static final int TIME_LIMIT_SECONDS = 5;
 	private static final int BUFFER_MINUTES = 30;
 	private static final int MAX_WAIT_TIME = 12*60;
 	private static final int MAX_ONDUTY_TIME = 24*60;
+	private static final int MAX_VEHICLES_PER_ZONE = 50;
 	private static final String TIME_DIMENSION = "Time";
 	private static final String DISTANCE_DIMENSION = "Distance";
 	private static final Map<String, Integer> SERVICE_TIME_MAP;
@@ -71,7 +72,7 @@ public class VehicleRoutingService {
 			data.distanceMatrix = computeDistanceMatrix(orderListForZone);
 			data.timeWindows = getTimeSlots(orderListForZone);
 			data.orderCount = orderListForZone.size();
-			data.vehicleCount = 100;
+			data.vehicleCount = MAX_VEHICLES_PER_ZONE;
 			data.depot = 0;
 
 			zoneToVehicleRoutingDataMap.put(zone, data);
