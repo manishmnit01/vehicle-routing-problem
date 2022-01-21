@@ -29,13 +29,24 @@ public class OrderAssignmentService {
 		return assignmentId;
 	}
 
-	@Async
-	public RoutePlanResponse startAssignment(VehicleRoutingInputData data, String assignmentId) {
+	public OrderAssignment verifyOrderAssignment(String assignmentId) {
+		//String assignmentId = UUID.randomUUID().toString();
+		OrderAssignment orderAssignment = new OrderAssignment();
+		orderAssignment.assignmentId = assignmentId;
+		orderAssignment.status = OrderAssignmentStatus.PROCESSING;
+		return orderAssignmentRepository.update(orderAssignment);
+	}
 
-		OrderAssignmentStatus orderAssignmentStatus = OrderAssignmentStatus.COMPLETED;
-		String failedMessage = null;
-		int dropped = 0;
-		int assigned = 0;
+	//@Async
+	public OrderAssignment startAssignment(VehicleRoutingInputData data, String assignmentId) {
+
+		OrderAssignment orderAssignment = new OrderAssignment();
+		orderAssignment.assignmentId = assignmentId;
+		orderAssignment.status = OrderAssignmentStatus.COMPLETED;
+		orderAssignment.failedMessage = null;
+		orderAssignment.dropped = 0;
+		orderAssignment.assigned = 0;
+		orderAssignment.total = data.pickupOrders.size();
 		RoutePlanResponse routePlanResponse = new RoutePlanResponse();
 		try {
 			RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleCount, data.starts, data.ends);
@@ -44,15 +55,16 @@ public class OrderAssignmentService {
 			routePlanResponse.allVehiclesRoute = vehicleRoutingSolver.getVehiclesRoutes(data, routing, manager, solution);
 			routePlanResponse.droppedOrders = data.pickupOrders.stream().filter(order -> order.status == PickupOrderStatus.PENDING).collect(Collectors.toList());
 			vehicleRoutingSolver.updateOrdersStatusInDB(routePlanResponse.allVehiclesRoute, routePlanResponse.droppedOrders, data.vehiclesMap);
-			dropped = routePlanResponse.droppedOrders.size();
-			assigned = data.pickupOrders.size() - dropped;
+			orderAssignment.dropped = routePlanResponse.droppedOrders.size();
+			orderAssignment.assigned = orderAssignment.total - orderAssignment.dropped;
 		} catch (Exception e)  {
-			orderAssignmentStatus = OrderAssignmentStatus.FAILED;
+			orderAssignment.status = OrderAssignmentStatus.FAILED;
+			orderAssignment.failedMessage = e.getMessage();
 			e.printStackTrace();
-			failedMessage = e.getMessage();
 		}
 
-		orderAssignmentRepository.update(assignmentId, orderAssignmentStatus, assigned, dropped, failedMessage);
-		return routePlanResponse;
+		OrderAssignment orderAssignmentUpdated = orderAssignmentRepository.update(orderAssignment);
+		orderAssignmentUpdated.routePlan = routePlanResponse;
+		return orderAssignmentUpdated;
 	}
 }

@@ -22,6 +22,8 @@ public class OrderAssignment {
 
 	public int dropped;
 
+	public RoutePlanResponse routePlan;
+
 	public Date createdTime = new Date();
 
 	public Date updatedTime = new Date();

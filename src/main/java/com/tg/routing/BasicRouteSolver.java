@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class VehicleRouteSolver {
+public class BasicRouteSolver {
 
 	private static final int SERVICE_TIME = 10;
 	private static final int VEHICLE_SPEED = 20;
