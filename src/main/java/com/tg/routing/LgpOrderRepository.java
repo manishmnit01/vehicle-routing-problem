@@ -16,10 +16,10 @@ public class LgpOrderRepository {
 	@Autowired
 	private MongoTemplate mongoTemplate;
 
-	public void updateOrderStatusSuccess(List<RouteNode> routeNodes, Vehicle vehicle) {
+	public void updateOrderStatusSuccess(List<RouteLocation> routeLocations, Vehicle vehicle) {
 		int pickupSeq = 10;
-		for (RouteNode routeNode : routeNodes) {
-			Criteria criteria = Criteria.where("orderId").is(routeNode.orderId);
+		for (RouteLocation routeLocation : routeLocations) {
+			Criteria criteria = Criteria.where("orderId").is(routeLocation.orderId);
 			Query query = new Query(criteria);
 			Update update = new Update();
 			update.set("orderStatus", 4);
@@ -28,9 +28,9 @@ public class LgpOrderRepository {
 			update.set("lastName", vehicle.lastName);
 			update.set("mobileNumber", vehicle.mobileNumber);
 			update.set("pickupSeq", pickupSeq);
-			update.set("distanceFromPrevNode", routeNode.distanceFromPrevNode);
-			update.set("distanceSoFar", routeNode.distanceSoFar);
-			update.set("reachTime", routeNode.reachTime);
+			update.set("distanceFromPrevNode", routeLocation.distanceFromPrevNode);
+			update.set("distanceSoFar", routeLocation.distanceSoFar);
+			update.set("reachTime", routeLocation.reachTime);
 			mongoTemplate.findAndModify(query, update, Map.class,"LgpOrder");
 			pickupSeq = pickupSeq + 10;
 		}

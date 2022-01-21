@@ -4,7 +4,7 @@ import java.util.*;
 
 public class RoutePlanResponse {
 
-	public Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
+	public Map<String, List<RouteLocation>> allVehiclesRoute = new HashMap<>();
 
 	public List<PickupOrder> droppedOrders = new ArrayList<>();
 

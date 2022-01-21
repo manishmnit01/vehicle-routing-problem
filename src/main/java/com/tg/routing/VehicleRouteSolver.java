@@ -232,17 +232,17 @@ public class VehicleRouteSolver {
 		// Inspect solution.
 		RoutingDimension timeDimension = routing.getMutableDimension("Time");
 		long totalTime = 0;
-		Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
+		Map<String, List<RouteLocation>> allVehiclesRoute = new HashMap<>();
 		for (int i = 0; i < data.vehicleCount; ++i) {
-			List<RouteNode> route = new ArrayList<>();
+			List<RouteLocation> route = new ArrayList<>();
 			long index = routing.start(i);
 			IntVar startTimeVar = timeDimension.cumulVar(index);
 			int startPointIndex = manager.indexToNode(index);
 			if(startPointIndex != i) {
 				throw new RuntimeException("start pickup index must be same as vehicle index");
 			}
-			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
-			route.add(startRouteNode);
+			RouteLocation startRouteLocation = new RouteLocation(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			route.add(startRouteLocation);
 			index = solution.value(routing.nextVar(index));
 			Location prevLocation = null;
 			Location currentLocation = data.vehicles.get(i);
@@ -255,8 +255,8 @@ public class VehicleRouteSolver {
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
 				//double distanceFromPrevLocation = distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
-				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
-				route.add(routeNode);
+				RouteLocation routeLocation = new RouteLocation(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
+				route.add(routeLocation);
 				index = solution.value(routing.nextVar(index));
 			}
 			IntVar endTimeVar = timeDimension.cumulVar(index);
@@ -264,8 +264,8 @@ public class VehicleRouteSolver {
 			if(endPointIndex != i) {
 				throw new RuntimeException("end pickup index must be same as vehicle index");
 			}
-			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
-			route.add(endRouteNode);
+			RouteLocation endRouteLocation = new RouteLocation(endPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			route.add(endRouteLocation);
 
 			totalTime += solution.min(endTimeVar);
 			allVehiclesRoute.put(data.vehicles.get(i).id, route);

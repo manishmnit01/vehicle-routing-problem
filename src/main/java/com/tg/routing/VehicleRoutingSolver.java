@@ -9,12 +9,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.Reader;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-public class VehicleRoutingService {
+public class VehicleRoutingSolver {
 
 	private static final int SERVICE_TIME = 20;
 	private static final int VEHICLE_SPEED = 20;
@@ -358,7 +357,7 @@ public class VehicleRoutingService {
 		return solution;
 	}
 
-	public Map<String, List<RouteNode>> getVehiclesRoutes(
+	public Map<String, List<RouteLocation>> getVehiclesRoutes(
 			VehicleRoutingInputData data, RoutingModel routing, RoutingIndexManager manager, Assignment solution) {
 		// Solution cost.
 		if(solution == null) {
@@ -369,19 +368,19 @@ public class VehicleRoutingService {
 		RoutingDimension timeDimension = routing.getMutableDimension(TIME_DIMENSION);
 		RoutingDimension distanceDimension = routing.getMutableDimension(DISTANCE_DIMENSION);
 		long totalTime = 0;
-		Map<String, List<RouteNode>> allVehiclesRoute = new HashMap<>();
+		Map<String, List<RouteLocation>> allVehiclesRoute = new HashMap<>();
 		for (int i = 0; i < data.vehicleCount; ++i) {
-			List<RouteNode> route = new ArrayList<>();
+			List<RouteLocation> route = new ArrayList<>();
 			long index = routing.start(i);
 			IntVar startTimeVar = timeDimension.cumulVar(index);
 			int startPointIndex = manager.indexToNode(index);
 			if(startPointIndex != i) {
 				throw new RuntimeException("start pickup index must be same as vehicle index");
 			}
-			RouteNode startRouteNode = new RouteNode(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
-			startRouteNode.distanceFromPrevNode = -1;
-			startRouteNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
-			route.add(startRouteNode);
+			RouteLocation startRouteLocation = new RouteLocation(startPointIndex, data.vehicles.get(i).id, solution.min(startTimeVar), solution.max(startTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			startRouteLocation.distanceFromPrevNode = -1;
+			startRouteLocation.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
+			route.add(startRouteLocation);
 			index = solution.value(routing.nextVar(index));
 			Location prevLocation = null;
 			Location currentLocation = data.vehicles.get(i);
@@ -394,10 +393,10 @@ public class VehicleRoutingService {
 				PickupOrder currentOrder = (PickupOrder) currentLocation;
 				currentOrder.status = PickupOrderStatus.CONFIRMED;
 				int distanceFromPrevLocation = (int) distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
-				RouteNode routeNode = new RouteNode(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
-				routeNode.distanceFromPrevNode = distanceFromPrevLocation;
-				routeNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
-				route.add(routeNode);
+				RouteLocation routeLocation = new RouteLocation(vehiclesPlusOrderIndex, currentLocation.id, solution.min(timeVar), solution.max(timeVar), currentLocation.latitude, currentLocation.longitude);
+				routeLocation.distanceFromPrevNode = distanceFromPrevLocation;
+				routeLocation.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
+				route.add(routeLocation);
 				index = solution.value(routing.nextVar(index));
 			}
 			IntVar endTimeVar = timeDimension.cumulVar(index);
@@ -405,14 +404,14 @@ public class VehicleRoutingService {
 			if(endPointIndex != i) {
 				throw new RuntimeException("end pickup index must be same as vehicle index");
 			}
-			RouteNode endRouteNode = new RouteNode(endPointIndex, data.vehicles.get(i).id, solution.min(endTimeVar), solution.max(endTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
+			RouteLocation endRouteLocation = new RouteLocation(endPointIndex, data.vehicles.get(i).id, solution.min(endTimeVar), solution.max(endTimeVar), data.vehicles.get(i).latitude, data.vehicles.get(i).longitude);
 			int distance = 0;
 			if(prevLocation != null) {
 				distance = (int) distance(prevLocation.latitude, prevLocation.longitude, currentLocation.latitude, currentLocation.longitude, "K");
 			}
-			endRouteNode.distanceFromPrevNode = distance;
-			endRouteNode.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
-			route.add(endRouteNode);
+			endRouteLocation.distanceFromPrevNode = distance;
+			endRouteLocation.distanceSoFar = (int) solution.min(distanceDimension.cumulVar(index));
+			route.add(endRouteLocation);
 
 			totalTime += solution.min(endTimeVar);
 			allVehiclesRoute.put(data.vehicles.get(i).id, route);
@@ -420,16 +419,16 @@ public class VehicleRoutingService {
 		return allVehiclesRoute;
 	}
 
-	public void updateOrdersStatusInDB(Map<String, List<RouteNode>> allVehiclesRoute, List<PickupOrder> droppedOrders, Map<String, Vehicle> vehiclesMap) {
-		for (Map.Entry<String, List<RouteNode>> vehicleRoute : allVehiclesRoute.entrySet()) {
+	public void updateOrdersStatusInDB(Map<String, List<RouteLocation>> allVehiclesRoute, List<PickupOrder> droppedOrders, Map<String, Vehicle> vehiclesMap) {
+		for (Map.Entry<String, List<RouteLocation>> vehicleRoute : allVehiclesRoute.entrySet()) {
 			String vehicleId  = vehicleRoute.getKey();
-			List<RouteNode> routeNodes = vehicleRoute.getValue();
+			List<RouteLocation> routeLocations = vehicleRoute.getValue();
 			Vehicle assignedVehicle = vehiclesMap.get(vehicleId);
 			// Remove first and last nodes because that is vehicle place
-			routeNodes.remove(routeNodes.size()-1);
-			routeNodes.remove(0);
-			//List<String> orderIds = routeNodes.stream().map(order -> order.orderId).collect(Collectors.toList());
-			lgpOrderRepository.updateOrderStatusSuccess(routeNodes, assignedVehicle);
+			routeLocations.remove(routeLocations.size()-1);
+			routeLocations.remove(0);
+			//List<String> orderIds = routeLocations.stream().map(order -> order.orderId).collect(Collectors.toList());
+			lgpOrderRepository.updateOrderStatusSuccess(routeLocations, assignedVehicle);
 		}
 
 		List<String> droppedOrderIds = droppedOrders.stream().map(order -> order.id).collect(Collectors.toList());

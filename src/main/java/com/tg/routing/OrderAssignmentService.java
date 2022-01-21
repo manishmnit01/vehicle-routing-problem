@@ -4,7 +4,6 @@ import com.google.ortools.constraintsolver.Assignment;
 import com.google.ortools.constraintsolver.RoutingIndexManager;
 import com.google.ortools.constraintsolver.RoutingModel;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +17,7 @@ public class OrderAssignmentService {
 	private OrderAssignmentRepository orderAssignmentRepository;
 
 	@Autowired
-	private VehicleRoutingService vehicleRoutingService;
+	private VehicleRoutingSolver vehicleRoutingSolver;
 
 	public String createOrderAssignment(int total) {
 		OrderAssignment orderAssignment = new OrderAssignment();
@@ -41,10 +40,10 @@ public class OrderAssignmentService {
 		try {
 			RoutingIndexManager manager = new RoutingIndexManager(data.timeMatrix.length, data.vehicleCount, data.starts, data.ends);
 			RoutingModel routing = new RoutingModel(manager);
-			Assignment solution = vehicleRoutingService.createRouteSolution(data, manager, routing);
-			routePlanResponse.allVehiclesRoute = vehicleRoutingService.getVehiclesRoutes(data, routing, manager, solution);
+			Assignment solution = vehicleRoutingSolver.createRouteSolution(data, manager, routing);
+			routePlanResponse.allVehiclesRoute = vehicleRoutingSolver.getVehiclesRoutes(data, routing, manager, solution);
 			routePlanResponse.droppedOrders = data.pickupOrders.stream().filter(order -> order.status == PickupOrderStatus.PENDING).collect(Collectors.toList());
-			vehicleRoutingService.updateOrdersStatusInDB(routePlanResponse.allVehiclesRoute, routePlanResponse.droppedOrders, data.vehiclesMap);
+			vehicleRoutingSolver.updateOrdersStatusInDB(routePlanResponse.allVehiclesRoute, routePlanResponse.droppedOrders, data.vehiclesMap);
 			dropped = routePlanResponse.droppedOrders.size();
 			assigned = data.pickupOrders.size() - dropped;
 		} catch (Exception e)  {

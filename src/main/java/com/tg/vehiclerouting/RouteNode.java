@@ -1,4 +1,4 @@
-package com.tg.routing;
+package com.tg.vehiclerouting;
 
 public class RouteNode {
 
@@ -25,19 +25,5 @@ public class RouteNode {
 		this.leaveTime = leaveTime;
 		this.latitude = latitude;
 		this.longitude = longitude;
-	}
-
-	@Override
-	public String toString() {
-		long reachHours= reachTime / 60;
-		long reachMinutes = reachTime % 60;
-		long leaveHours= leaveTime / 60;
-		long leaveMinutes = leaveTime % 60;
-		return "RouteNode{" +
-				"orderId=" + orderId +
-				" distance=" + distanceFromPrevNode +
-				" reachTIme=" + reachHours + ":" + reachMinutes +
-				" leaveTIme=" + leaveHours + ":" + leaveMinutes +
-				'}';
 	}
 }
